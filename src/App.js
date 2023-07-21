@@ -55,41 +55,63 @@ export default function App() {
 
   return (
     <>
-      <NavBar movies={movies} />
-      <Main movies={movies} />
+      <NavBar movies={movies}>
+        <MovieCounts movies={movies} />
+      </NavBar>
+      <Main>
+        <Box>
+          <MoviesList movies={movies} />
+        </Box>
+      </Main>
     </>
   );
 }
 
-function NavBar({ movies }) {
-  const [query, setQuery] = useState("");
+function NavBar({ children }) {
   return (
     <nav className="nav-bar">
-      <div className="logo">
-        <span role="img">🍿</span>
-        <h1>usePopcorn</h1>
-      </div>
-      <input
-        className="search"
-        type="text"
-        placeholder="Search movies..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <p className="num-results">
-        Found <strong>{movies.length}</strong> results
-      </p>
+      <Logo />
+      <QuerySearch />
+      {children}
     </nav>
   );
 }
 
-function Main({ movies }) {
+function MovieCounts({ movies }) {
+  return (
+    <p className="num-results">
+      Found <strong>{movies.length}</strong> results
+    </p>
+  );
+}
+
+function QuerySearch() {
+  const [query, setQuery] = useState("");
+  return (
+    <input
+      className="search"
+      type="text"
+      placeholder="Search movies..."
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+    />
+  );
+}
+
+function Logo() {
+  return (
+    <div className="logo">
+      <span role="img">🍿</span>
+      <h1>usePopcorn</h1>
+    </div>
+  );
+}
+
+function Main({ children }) {
   const [watched, setWatched] = useState(tempWatchedData);
   return (
     <main className="main">
-      <Box>
-        <MoviesList movies={movies} />
-      </Box>
+      {children}
       <Box element={<ListWatchedMovie watched={watched} />}>
         <WatchedMovieSummary watched={watched} />
       </Box>
