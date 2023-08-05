@@ -1,57 +1,66 @@
-import { Children, useState } from "react";
+import axios from "axios";
+import { useEffect, useState } from "react";
+import StarComponent from "./Star";
 
-const tempMovieData = [
-  {
-    imdbID: "tt1375666",
-    Title: "Inception",
-    Year: "2010",
-    Poster:
-      "https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_SX300.jpg",
-  },
-  {
-    imdbID: "tt0133093",
-    Title: "The Matrix",
-    Year: "1999",
-    Poster:
-      "https://m.media-amazon.com/images/M/MV5BNzQzOTk3OTAtNDQ0Zi00ZTVkLWI0MTEtMDllZjNkYzNjNTc4L2ltYWdlXkEyXkFqcGdeQXVyNjU0OTQ0OTY@._V1_SX300.jpg",
-  },
-  {
-    imdbID: "tt6751668",
-    Title: "Parasite",
-    Year: "2019",
-    Poster:
-      "https://m.media-amazon.com/images/M/MV5BYWZjMjk3ZTItODQ2ZC00NTY5LWE0ZDYtZTI3MjcwN2Q5NTVkXkEyXkFqcGdeQXVyODk4OTc3MTY@._V1_SX300.jpg",
-  },
-];
-
-const tempWatchedData = [
-  {
-    imdbID: "tt1375666",
-    Title: "Inception",
-    Year: "2010",
-    Poster:
-      "https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_SX300.jpg",
-    runtime: 148,
-    imdbRating: 8.8,
-    userRating: 10,
-  },
-  {
-    imdbID: "tt0088763",
-    Title: "Back to the Future",
-    Year: "1985",
-    Poster:
-      "https://m.media-amazon.com/images/M/MV5BZmU0M2Y1OGUtZjIxNi00ZjBkLTg1MjgtOWIyNThiZWIwYjRiXkEyXkFqcGdeQXVyMTQxNzMzNDI@._V1_SX300.jpg",
-    runtime: 116,
-    imdbRating: 8.5,
-    userRating: 9,
-  },
-];
-
+const KEY = "fb9425e";
+const endpoint = `http://www.omdbapi.com/?apikey=${KEY}`;
 const average = (arr) =>
   arr.reduce((acc, cur, i, arr) => acc + cur / arr.length, 0);
 
 export default function App() {
-  const [movies, setMovies] = useState(tempMovieData);
+  const [movies, setMovies] = useState([]);
+  const [watched, setWatched] = useState(function () {
+    const response = localStorage.getItem("watched");
+    return response ? JSON.parse(response) : [];
+  });
+  const [movieSelected, setMovieSelected] = useState({
+    imdbId: "",
+    userRating: 0,
+  });
+
+  function handleMovieClick(imdbId) {
+    setMovieSelected((elem) => {
+      if (elem.imdbId === imdbId) return { imdbId: "", userRating: 0 };
+      const movieAdded = watched.filter((key) => key.imdbID === imdbId);
+      return {
+        imdbId,
+        userRating: movieAdded.length > 0 ? movieAdded[0].userRating : 0,
+      };
+    });
+  }
+
+  function handleAddMovie(movie) {
+    setWatched((elem) => {
+      if ([...elem.filter((key) => key.imdbID === movie.imdbID)].length === 0) {
+        const watchedMovieList = [...elem, movie];
+
+        localStorage.setItem("watched", JSON.stringify(watchedMovieList));
+        return watchedMovieList;
+      } else return elem;
+    });
+    handleMovieClick("");
+  }
+
+  useEffect(
+    function () {
+      async function getAllData() {
+        try {
+          const response = await axios.get(
+            endpoint + `&s="interstellar"&limit=10`
+          );
+          if (response.data.Response === "True") {
+            setMovies(response.data.Search);
+          } else {
+            console.log(response.data);
+          }
+        } catch (error) {
+          console.log(error);
+        }
+      }
+      getAllData();
+    },
+    [setMovies]
+  );
 
   return (
     <>
@@ -60,10 +69,113 @@ export default function App() {
       </NavBar>
       <Main>
         <Box>
-          <MoviesList movies={movies} />
+          <MoviesList movies={movies} onMovieClick={handleMovieClick} />
         </Box>
+        {movieSelected.imdbId === "" ? (
+          <Box element={<ListWatchedMovie watched={watched} />}>
+            <WatchedMovieSummary watched={watched} />
+          </Box>
+        ) : (
+          <MoviesDetailsPage
+            movieSelected={movieSelected}
+            onAddMovie={handleAddMovie}
+          />
+        )}
       </Main>
     </>
+  );
+}
+
+function MoviesDetailsPage({ movieSelected, onAddMovie }) {
+  const [selectedMovie, setSelectedMovie] = useState({});
+  const [rating, setRating] = useState(0);
+  const [rated, setRated] = useState(false);
+
+  let ratingSelected = rating > 0;
+
+  function handleMovieAdd() {
+    if (rating <= 0) return;
+    const movieObj = {
+      imdbID: selectedMovie.imdbID,
+      Poster: selectedMovie.Poster,
+      Title: selectedMovie.Title,
+      imdbRating: selectedMovie.imdbRating,
+      runtime: selectedMovie.Runtime ? selectedMovie.Runtime.split(" ")[0] : "",
+      userRating: rating,
+    };
+    onAddMovie(movieObj);
+  }
+
+  function handleRatingSelection(rating) {
+    setRating(rating);
+    ratingSelected = rating > 0;
+  }
+
+  useEffect(
+    function () {
+      setRating(movieSelected.userRating);
+      if (movieSelected.userRating > 0) setRated(true);
+      else setRated(false);
+
+      async function getSelectedMovieDetails() {
+        const response = await axios.get(
+          endpoint + `&i=${movieSelected.imdbId}`
+        );
+        if (response.data.Response === "True") {
+          setSelectedMovie(response.data);
+        }
+      }
+      getSelectedMovieDetails();
+    },
+    [movieSelected, setSelectedMovie]
+  );
+
+  return (
+    <Box>
+      {selectedMovie !== {} && (
+        <div className="details">
+          <header>
+            <img src={selectedMovie.Poster} />
+            <div className="details-overview">
+              <h2>{selectedMovie.Title}</h2>
+              <p>
+                {selectedMovie.Released} &bull; {selectedMovie.Runtime}
+              </p>
+              <p> {selectedMovie.Genre}</p>
+              <p> &#11088; {selectedMovie.imdbRating} IMDB rated</p>
+            </div>
+          </header>
+
+          <section>
+            {rated && <p> You have rated this movie with {rating} &#11088;</p>}
+            {!rated && (
+              <>
+                <StarComponent
+                  maxRating={10}
+                  rating={rating}
+                  onSetRating={handleRatingSelection}
+                  size={20}
+                />
+                {ratingSelected && (
+                  <button className="btn-add" onClick={handleMovieAdd}>
+                    + Add to watch-list
+                  </button>
+                )}
+              </>
+            )}
+            <p>
+              <em>{selectedMovie.Plot}</em>
+            </p>
+            <p>
+              Starring <em>{selectedMovie.Actors}</em>
+            </p>
+            <p>
+              Directed By <em>{selectedMovie.Director}</em>
+            </p>
+          </section>
+        </div>
+      )}
+    </Box>
   );
 }
 
@@ -108,15 +220,7 @@ function Logo() {
 }
 
 function Main({ children }) {
-  const [watched, setWatched] = useState(tempWatchedData);
-  return (
-    <main className="main">
-      {children}
-      <Box element={<ListWatchedMovie watched={watched} />}>
-        <WatchedMovieSummary watched={watched} />
-      </Box>
-    </main>
-  );
+  return <main className="main">{children}</main>;
 }
 
 function Box({ element, children }) {
@@ -132,19 +236,19 @@ function Box({ element, children }) {
   );
 }
 
-function MoviesList({ movies }) {
+function MoviesList({ movies, onMovieClick }) {
   return (
     <ul className="list">
       {movies?.map((movie) => (
-        <Movies movie={movie} />
+        <Movies movie={movie} key={movie.imdbID} onMovieClick={onMovieClick} />
       ))}
     </ul>
   );
 }
 
-function Movies({ movie }) {
+function Movies({ movie, onMovieClick }) {
   return (
-    <li key={movie.imdbID}>
+    <li key={movie.imdbID} onClick={() => onMovieClick(movie.imdbID)}>
       <img src={movie.Poster} alt={`${movie.Title} poster`} />
       <h3>{movie.Title}</h3>
       <div>
@@ -161,7 +265,7 @@ function ListWatchedMovie({ watched }) {
   return (
     <ul className="list">
       {watched.map((movie) => (
-        <WatchedMovie movie={movie} />
+        <WatchedMovie movie={movie} key={movie.imdbID} />
       ))}
     </ul>
   );
@@ -191,9 +295,15 @@ function WatchedMovie({ movie }) {
 }
 
 function WatchedMovieSummary({ watched }) {
-  const avgImdbRating = average(watched.map((movie) => movie.imdbRating));
-  const avgUserRating = average(watched.map((movie) => movie.userRating));
-  const avgRuntime = average(watched.map((movie) => movie.runtime));
+  const avgImdbRating = average(
+    watched.map((movie) => movie.imdbRating || 0)
+  ).toFixed("2");
+  const avgUserRating = average(
+    watched.map((movie) => movie.userRating || 0)
+  ).toFixed("2");
+  const avgRuntime = average(
+    watched.map((movie) => movie.runtime || 0)
+  ).toFixed("2");
 
   return (
     <div className="summary">
