@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import StarComponent from "./Star";
+import { debounce } from "lodash";
 
 const KEY = "fb9425e";
 const endpoint = `http://www.omdbapi.com/?apikey=${KEY}`;
@@ -29,6 +30,14 @@ export default function App() {
     });
   }
 
+  function handleMovieRemove(imdbId) {
+    setWatched((elem) => {
+      const watchedMovieList = [...elem.filter((key) => key.imdbID !== imdbId)];
+      localStorage.setItem("watched", JSON.stringify(watchedMovieList));
+      return watchedMovieList;
+    });
+  }
+
   function handleAddMovie(movie) {
     setWatched((elem) => {
       if ([...elem.filter((key) => key.imdbID === movie.imdbID)].length === 0) {
@@ -41,30 +50,9 @@ export default function App() {
     handleMovieClick("");
   }
 
-  useEffect(
-    function () {
-      async function getAllData() {
-        try {
-          const response = await axios.get(
-            endpoint + `&s="interstellar"&limit=10`
-          );
-          if (response.data.Response === "True") {
-            setMovies(response.data.Search);
-          } else {
-            console.log(response.data);
-          }
-        } catch (error) {
-          console.log(error);
-        }
-      }
-      getAllData();
-    },
-    [setMovies]
-  );
-
   return (
     <>
-      <NavBar movies={movies}>
+      <NavBar movies={movies} onAddingMovies={setMovies}>
         <MovieCounts movies={movies} />
       </NavBar>
       <Main>
@@ -72,12 +60,20 @@ export default function App() {
           <MoviesList movies={movies} onMovieClick={handleMovieClick} />
         </Box>
         {movieSelected.imdbId === "" ? (
-          <Box element={<ListWatchedMovie watched={watched} />}>
+          <Box
+            element={
+              <ListWatchedMovie
+                watched={watched}
+                onRemove={handleMovieRemove}
+              />
+            }
+          >
             <WatchedMovieSummary watched={watched} />
           </Box>
         ) : (
           <MoviesDetailsPage
             movieSelected={movieSelected}
+            onBackButton={setMovieSelected}
             onAddMovie={handleAddMovie}
           />
         )}
@@ -86,10 +82,11 @@ export default function App() {
   );
 }
 
-function MoviesDetailsPage({ movieSelected, onAddMovie }) {
+function MoviesDetailsPage({ movieSelected, onAddMovie, onBackButton }) {
   const [selectedMovie, setSelectedMovie] = useState({});
   const [rating, setRating] = useState(0);
   const [rated, setRated] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   let ratingSelected = rating > 0;
 
@@ -113,6 +110,7 @@ function MoviesDetailsPage({ movieSelected, onAddMovie }) {
 
   useEffect(
     function () {
+      setLoading(true);
       setRating(movieSelected.userRating);
       if (movieSelected.userRating > 0) setRated(true);
       else setRated(false);
@@ -124,6 +122,7 @@ function MoviesDetailsPage({ movieSelected, onAddMovie }) {
         if (response.data.Response === "True") {
           setSelectedMovie(response.data);
         }
+        setLoading(false);
       }
       getSelectedMovieDetails();
     },
@@ -132,10 +131,13 @@ function MoviesDetailsPage({ movieSelected, onAddMovie }) {
 
   return (
     <Box>
-      {selectedMovie !== {} && (
+      {!loading && (
         <div className="details">
+          <button onClick={() => onBackButton({ imdbId: "", userRating: 0 })}>
+            🔙
+          </button>
           <header>
-            <img src={selectedMovie.Poster} />
+            <img src={selectedMovie.Poster} alt={selectedMovie.Title} />
             <div className="details-overview">
               <h2>{selectedMovie.Title}</h2>
               <p>
@@ -175,15 +177,16 @@ function MoviesDetailsPage({ movieSelected, onAddMovie }) {
           </section>
         </div>
       )}
+      {loading && <h2>LOADING...</h2>}
     </Box>
   );
 }
 
-function NavBar({ children }) {
+function NavBar({ onAddingMovies, children }) {
   return (
     <nav className="nav-bar">
       <Logo />
-      <QuerySearch />
+      <QuerySearch onAddingMovies={onAddingMovies} />
       {children}
     </nav>
   );
@@ -197,8 +200,32 @@ function MovieCounts({ movies }) {
   );
 }
 
-function QuerySearch() {
+function QuerySearch({ onAddingMovies }) {
   const [query, setQuery] = useState("");
+
+  useEffect(
+    function () {
+      const controller = new AbortController();
+      const getAllData = debounce(async function () {
+        try {
+          const response = await axios.get(endpoint + `&s=${query}&limit=10`, {
+            signal: controller.signal,
+          });
+          if (response.data.Response === "True") {
+            onAddingMovies(response.data.Search);
+          }
+        } catch (error) {
+          console.log(error);
+        }
+      }, 1000);
+
+      if (query.length > 3) getAllData();
+
+      return () => controller.abort();
+    },
+    [query, onAddingMovies]
+  );
+
   return (
     <input
       className="search"
@@ -261,17 +288,17 @@ function Movies({ movie, onMovieClick }) {
   );
 }
 
-function ListWatchedMovie({ watched }) {
+function ListWatchedMovie({ watched, onRemove }) {
   return (
     <ul className="list">
       {watched.map((movie) => (
-        <WatchedMovie movie={movie} key={movie.imdbID} />
+        <WatchedMovie movie={movie} key={movie.imdbID} onRemove={onRemove} />
       ))}
     </ul>
   );
 }
 
-function WatchedMovie({ movie }) {
+function WatchedMovie({ movie, onRemove }) {
   return (
     <li key={movie.imdbID}>
       <img src={movie.Poster} alt={`${movie.Title} poster`} />
@@ -289,6 +316,7 @@ function WatchedMovie({ movie }) {
           <span>⏳</span>
           <span>{movie.runtime} min</span>
         </p>
+        <button onClick={() => onRemove(movie.imdbID)}>❌</button>
       </div>
     </li>
   );
