@@ -7,11 +7,7 @@ const StarComponentStyle = {
   gap: "5px",
 };
 
-const StarStyle = {
-  height: "48px",
-  width: "48px",
-  display: "flex",
-};
+
 
 const textStyle = {
   lineHeight: "1",
@@ -24,9 +20,15 @@ StarComponent.prototype = {
   maxRating: PropTypes.number,
   rating: PropTypes.number,
   onSetRating: PropTypes.func,
+  size: PropTypes.number,
 };
 
-export default function StarComponent({ maxRating = 5, rating, onSetRating }) {
+export default function StarComponent({
+  maxRating = 5,
+  rating,
+  onSetRating,
+  size = 48,
+}) {
   const [tempRate, setTempRate] = useState(0);
 
   function handleRating(rating) {
@@ -44,6 +46,7 @@ export default function StarComponent({ maxRating = 5, rating, onSetRating }) {
             index={index}
             isFull={fullBool}
             onStarHover={setTempRate}
+            size={size}
           />
         );
       })}
@@ -52,7 +55,12 @@ export default function StarComponent({ maxRating = 5, rating, onSetRating }) {
   );
 }
 
-function Star({ onRating, index, isFull, onStarHover }) {
+function Star({ onRating, index, isFull, onStarHover, size }) {
+  const StarStyle = {
+    height: `${size}px`,
+    width: `${size}px`,
+    display: "flex",
+  };
   return (
     <span
       role="button"
